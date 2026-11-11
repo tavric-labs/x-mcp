@@ -1,0 +1,42 @@
+version: v1
+servers:
+    - name: x
+      description: Read your X profile and publish posts as you, signed in through mcp-auth.
+      image: registry.mcpruntime.org/org/x-mcp/x
+      imageTag: dev
+      route: /x/mcp
+      publicPathPrefix: x
+      ingressHost: mcp.mcpruntime.org
+      port: 8080
+      replicas: 1
+      envVars:
+        - name: X_MCP_RESOURCE
+          value: https://mcp.mcpruntime.org/x/mcp
+        - name: X_MCP_ISSUER
+          value: https://auth.mcpruntime.org/mcp-auth
+        - name: X_MCP_CLIENT_ID
+          value: x-mcp
+        - name: X_MCP_CLIENT_KEY_ID
+          value: x-mcp-1
+      secretEnvVars:
+        - name: X_MCP_CLIENT_KEY
+          secretKeyRef:
+            name: x-mcp-client-key
+            key: X_MCP_CLIENT_KEY
+      namespace: mcp-servers
+      auth:
+        issuerURL: https://auth.mcpruntime.org/mcp-auth
+        audience: https://mcp.mcpruntime.org/x/mcp
+        scopes: [tools:read, tools:write]
+      tools:
+        - name: x_get_profile
+          description: Return the signed-in person's X display name, username and user id.
+          requiredTrust: low
+          sideEffect: read
+        - name: x_create_post
+          description: Publish an X post as the signed-in person; a dry run unless confirm is true.
+          requiredTrust: high
+          sideEffect: write
+      policy:
+        mode: allow-list
+        defaultDecision: deny

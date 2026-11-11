@@ -1,0 +1,44 @@
+# Admin-applied sign-in wiring for this server on MCP Runtime. It is not part of
+# servers.yaml, which a tenant deploys: it defines an upstream identity provider and
+# registers this server's resource client, so a cluster administrator applies it.
+#
+# Fill every <...> value, then preview and apply:
+#   mcp-runtime cluster mcp-auth resource apply --file .mcp/auth-resource.yaml \
+#     --kubeconfig <kubeconfig> --context <context> --dry-run
+# Deploy the server first, so MCP Auth already serves its resource. The connector's
+# client secret is never written here: add X_CLIENT_SECRET to the
+# mcp-auth-connector-secrets Secret before applying.
+#
+# X is plain OAuth 2.0 with PKCE (no openid / id_token). Identity comes from
+# userinfo. X nests the user under {"data":{"id":...}}, while mcp-auth today
+# expects a top-level identity claim — login may need a small mcp-auth unwrap
+# for nested "data" before sign-in works end to end. API calls also need X
+# pay-per-use credits in the Developer Console.
+id: x
+resource_url: <public MCP URL, equal to auth.audience in servers.yaml, e.g. https://mcp.example.com/x/mcp>
+required_scopes: [tools:read, tools:write]
+resource_client:
+  client_id: x-mcp # X_MCP_CLIENT_ID
+  public_key_pem: |
+    <PEM public key for the private key in X_MCP_CLIENT_KEY>
+login:
+  label: Sign in with X
+  # Hand the signed-in person's X token to this server, which exchanges it.
+  downstream_token: upstream_session
+connector:
+  issuer: https://x.com
+  authorization_endpoint: https://x.com/i/oauth2/authorize
+  token_endpoint: https://api.x.com/2/oauth2/token
+  # Unused without openid; mcp-auth still requires a jwks_uri on every connector.
+  jwks_uri: https://api.x.com/2/oauth2/token
+  userinfo_endpoint: https://api.x.com/2/users/me
+  client_id: <X app client ID>
+  client_secret_env: X_CLIENT_SECRET
+  token_endpoint_auth_method: client_secret_basic
+  exchange_client_id: <X app client ID>
+  # No openid: plain OAuth 2.0. offline.access lets mcp-auth refresh ~2h tokens.
+  scopes: [tweet.read, tweet.write, users.read, offline.access]
+  identity_claims: [id]
+  allowed_upstream_callback_uris:
+    - <MCP Auth issuer URL>/identity/callback
+  # X requires PKCE (default). Do not set pkce: false.
